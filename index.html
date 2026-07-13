@@ -3,11 +3,30 @@ html<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:black;}
-img{width:100%;height:100%;object-fit:contain;}
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:black;
+}
+img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+}
 </style>
 </head>
 <body>
-<img src="https://cdn.tegna-media.com/wcnc/weather/wcnc_dma_radar.gif">
+<img id="radar">
+<script>
+function updateRadar() {
+    document.getElementById('radar').src =
+        'https://cdn.tegna-media.com/wcnc/weather/wcnc_dma_radar.gif?t=' +
+        new Date().getTime();
+}
+updateRadar();
+setInterval(updateRadar, 150000); // 2.5 minutes
+</script>
 </body>
 </html>
