@@ -1,0 +1,66 @@
+html<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:black;
+    font-family:Arial, sans-serif;
+}
+#alertBox{
+    display:none;
+    width:100%;
+    height:100%;
+    box-sizing:border-box;
+    padding:20px;
+    color:white;
+    align-items:center;
+}
+.severe { background:#b30000; }
+.moderate { background:#cc7a00; }
+.minor { background:#4d4d4d; }
+#alertText{
+    font-size:2.2vw;
+    font-weight:bold;
+    white-space:nowrap;
+    overflow:hidden;
+}
+</style>
+</head>
+<body>
+<div id="alertBox"><div id="alertText"></div></div>
+<script>
+async function updateAlerts() {
+    try {
+        const res = await fetch('https://api.weather.gov/alerts/active?zone=NCC025');
+        const data = await res.json();
+        const box = document.getElementById('alertBox');
+        const text = document.getElementById('alertText');
+
+        if (data.features && data.features.length > 0) {
+            const alert = data.features[0].properties;
+            text.textContent = alert.event + ': ' + alert.headline;
+
+            box.className = '';
+            const sev = (alert.severity || '').toLowerCase();
+            if (sev === 'extreme' || sev === 'severe') box.classList.add('severe');
+            else if (sev === 'moderate') box.classList.add('moderate');
+            else box.classList.add('minor');
+
+            box.style.display = 'flex';
+        } else {
+            box.style.display = 'none';
+        }
+    } catch (e) {
+        document.getElementById('alertBox').style.display = 'none';
+    }
+}
+updateAlerts();
+setInterval(updateAlerts, 150000); // 2.5 minutes, matches your radar refresh
+</script>
+</body>
+</html>
