@@ -43,9 +43,7 @@ async function updateAlerts() {
         });
 
         if (!res.ok) {
-            box.className = 'minor';
-            text.textContent = 'Alert fetch failed: HTTP ' + res.status;
-            box.style.display = 'flex';
+            box.style.display = 'none';
             return;
         }
 
@@ -66,13 +64,11 @@ async function updateAlerts() {
             box.style.display = 'none';
         }
     } catch (e) {
-        box.className = 'minor';
-        text.textContent = 'Alert script error: ' + e.message;
-        box.style.display = 'flex';
+        box.style.display = 'none';
     }
 }
 updateAlerts();
-setInterval(updateAlerts, 150000);
+setInterval(updateAlerts, 150000); // 2.5 minutes
 </script>
 </body>
 </html>
