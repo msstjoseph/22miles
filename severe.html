@@ -1,103 +1,78 @@
-Example Value
-Schema
-{
-  "@context": [
-    "string"
-  ],
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "@context": [
-        "string"
-      ],
-      "id": "https://example.com/",
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          0,
-          0
-        ],
-        "bbox": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
-      "properties": {
-        "id": "string",
-        "areaDesc": "string",
-        "geocode": {
-          "UGC": [
-            "IDZ214"
-          ],
-          "SAME": [
-            "819968"
-          ]
-        },
-        "affectedZones": [
-          "https://example.com/"
-        ],
-        "references": [
-          {
-            "@id": "https://example.com/",
-            "identifier": "string",
-            "sender": "string",
-            "sent": "2026-07-14T17:06:35.726Z"
-          }
-        ],
-        "sent": "2026-07-14T17:06:35.726Z",
-        "effective": "2026-07-14T17:06:35.726Z",
-        "onset": "2026-07-14T17:06:35.726Z",
-        "expires": "2026-07-14T17:06:35.726Z",
-        "ends": "2026-07-14T17:06:35.726Z",
-        "status": "Actual",
-        "messageType": "Alert",
-        "category": "Met",
-        "severity": "Extreme",
-        "certainty": "Observed",
-        "urgency": "Immediate",
-        "event": "string",
-        "sender": "string",
-        "senderName": "string",
-        "headline": "string",
-        "description": "string",
-        "instruction": "string",
-        "note": "string",
-        "response": "Shelter",
-        "parameters": {
-          "additionalProp1": [
-            "string"
-          ],
-          "additionalProp2": [
-            "string"
-          ],
-          "additionalProp3": [
-            "string"
-          ]
-        },
-        "scope": "Public",
-        "code": "string",
-        "language": "string",
-        "web": "string",
-        "eventCode": {
-          "additionalProp1": [
-            "string"
-          ],
-          "additionalProp2": [
-            "string"
-          ],
-          "additionalProp3": [
-            "string"
-          ]
-        }
-      }
-    }
-  ],
-  "title": "string",
-  "updated": "2026-07-14T17:06:35.726Z",
-  "pagination": {
-    "next": "https://example.com/"
-  }
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:black;
+    font-family:Arial, sans-serif;
 }
+#alertBox{
+    display:none;
+    width:100%;
+    height:100%;
+    box-sizing:border-box;
+    padding:20px;
+    color:white;
+    align-items:center;
+}
+.severe { background:#b30000; }
+.moderate { background:#cc7a00; }
+.minor { background:#4d4d4d; }
+#alertText{
+    font-size:2.2vw;
+    font-weight:bold;
+    white-space:nowrap;
+    overflow:hidden;
+}
+</style>
+</head>
+<body>
+<div id="alertBox"><div id="alertText"></div></div>
+<script>
+async function updateAlerts() {
+    const box = document.getElementById('alertBox');
+    const text = document.getElementById('alertText');
+    try {
+        const res = await fetch('https://api.weather.gov/alerts/active?zone=NCC025&_=' + Date.now(), {
+            headers: { 'Accept': 'application/geo+json' }
+        });
+
+        if (!res.ok) {
+            box.className = 'minor';
+            text.textContent = 'Alert fetch failed: HTTP ' + res.status;
+            box.style.display = 'flex';
+            return;
+        }
+
+        const data = await res.json();
+
+        if (data.features && data.features.length > 0) {
+            const alert = data.features[0].properties;
+            text.textContent = alert.event + ': ' + alert.headline;
+
+            box.className = '';
+            const sev = (alert.severity || '').toLowerCase();
+            if (sev === 'extreme' || sev === 'severe') box.classList.add('severe');
+            else if (sev === 'moderate') box.classList.add('moderate');
+            else box.classList.add('minor');
+
+            box.style.display = 'flex';
+        } else {
+            box.style.display = 'none';
+        }
+    } catch (e) {
+        box.className = 'minor';
+        text.textContent = 'Alert script error: ' + e.message;
+        box.style.display = 'flex';
+    }
+}
+updateAlerts();
+setInterval(updateAlerts, 150000);
+</script>
+</body>
+</html>
