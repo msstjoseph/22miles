@@ -1,32 +1,29 @@
-html<!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WCNC radar and Concord weather alerts</title>
 <style>
-html,body{
-    margin:0;
-    width:100%;
-    height:100%;
-    overflow:hidden;
-    background:black;
-}
-img{
-    width:100%;
-    height:100%;
-    object-fit:contain;
-}
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: black; }
+body { display: flex; flex-direction: column; }
+main { flex: 1; min-height: 0; }
+img { width: 100%; height: 100%; object-fit: contain; }
+iframe { width: 100%; height: clamp(48px, 12vh, 88px); flex: none; border: 0; }
 </style>
 </head>
 <body>
-<img id="radar">
+<main><img id="radar" alt="WCNC regional weather radar"></main>
+<iframe src="severe.html" title="Live Concord weather alert ticker"></iframe>
 <script>
 function updateRadar() {
-    document.getElementById('radar').src =
-        'https://cdn.tegna-media.com/wcnc/weather/wcnc_dma_radar.gif?t=' +
-        new Date().getTime();
+  // Preload each refresh so a temporary image failure does not erase the radar.
+  const image = new Image();
+  image.onload = function () { document.getElementById('radar').src = image.src; };
+  image.src = 'https://cdn.tegna-media.com/wcnc/weather/wcnc_dma_radar.gif?t=' + Date.now();
 }
 updateRadar();
-setInterval(updateRadar, 150000); // 2.5 minutes
+setInterval(updateRadar, 150000);
 </script>
 </body>
 </html>
