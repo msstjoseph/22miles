@@ -34,7 +34,11 @@ body.unavailable { background: #424242; }
 // NWS point lookup for central Concord, NC (28025), rather than an entire county.
 const ALERT_URL = 'https://api.weather.gov/alerts/active?point=35.4088,-80.5795';
 const REFRESH_MS = 60000;
-const STALE_MS = 5 * 60000;
+const DIRECT_STALE_MS = 5 * 60000;
+const BACKUP_STALE_MS = 15 * 60000;
+const BACKUP_URL = 'https://msstjoseph.github.io/22miles/alerts-data.json';
+let staleAfter = DIRECT_STALE_MS;
+let usingBackup = false;
 const track = document.getElementById('track');
 const copies = Array.from(document.querySelectorAll('.copy'));
 let lastSuccess = 0;
@@ -79,13 +83,14 @@ function rank(p) {
 }
 
 function displayLatest() {
-  if (!lastSuccess || Date.now() - lastSuccess > STALE_MS) {
+  if (!lastSuccess || Date.now() - lastSuccess > staleAfter) {
     show('Alerts unavailable — unable to confirm current conditions', 'unavailable');
     return;
   }
   const alerts = activeAlerts(latest);
+  const checked = usingBackup ? ' • Checked ' + new Date(lastSuccess).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '';
   if (!alerts.length) {
-    show('No active alerts • Concord, NC 28025 • National Weather Service', '');
+    show('No active alerts • Concord, NC 28025 • National Weather Service' + checked, '');
     return;
   }
   const message = alerts.map(p => {
@@ -96,29 +101,56 @@ function displayLatest() {
   }).join('     •     ');
   const kind = alerts.some(p => /Warning/i.test(p.event) || p.severity === 'Extreme') ? 'warning'
     : alerts.some(p => /Watch/i.test(p.event)) ? 'watch' : 'advisory';
-  show(message, kind);
+  show(message + checked, kind);
+}
+
+// XMLHttpRequest also works on signage players with limited fetch/AbortController support.
+function requestJSON(url) {
+  return new Promise(function (resolve, reject) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.timeout = 12000;
+    xhr.onload = function () {
+      try {
+        if (xhr.status < 200 || xhr.status >= 300) throw new Error('HTTP ' + xhr.status);
+        const data = JSON.parse(xhr.responseText);
+        if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('Invalid alert feed');
+        resolve(data);
+      } catch (error) { reject(error); }
+    };
+    xhr.onerror = function () { reject(new Error('Network unavailable')); };
+    xhr.ontimeout = function () { reject(new Error('Request timed out')); };
+    xhr.send();
+  });
 }
 
 async function updateAlerts() {
   if (busy) return;
   busy = true;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch(ALERT_URL, {
-      headers: { Accept: 'application/geo+json' }, cache: 'no-store', signal: controller.signal
-    });
-    if (!response.ok) throw new Error('NWS HTTP ' + response.status);
-    const data = await response.json();
-    if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('Invalid NWS response');
+    let data;
+    try {
+      data = await requestJSON(ALERT_URL);
+      lastSuccess = Date.now();
+      staleAfter = DIRECT_STALE_MS;
+      usingBackup = false;
+    } catch (directError) {
+      // This file is refreshed by GitHub, so the player need only reach the site it already displays.
+      data = await requestJSON(BACKUP_URL + '?t=' + Date.now());
+      const checkedAt = Date.parse(data.checkedAt);
+      const age = Date.now() - checkedAt;
+      if (!Number.isFinite(checkedAt) || age < -60000 || age > BACKUP_STALE_MS) {
+        throw new Error('Backup alert feed is stale');
+      }
+      lastSuccess = checkedAt;
+      staleAfter = BACKUP_STALE_MS;
+      usingBackup = true;
+    }
     latest = data.features;
-    lastSuccess = Date.now();
     displayLatest();
   } catch (error) {
-    // Never turn a failed request into a reassuring "no active alerts" message.
-    show('Alerts unavailable — retrying connection to the National Weather Service', 'unavailable');
+    show('Alerts unavailable — unable to confirm current conditions', 'unavailable');
   } finally {
-    clearTimeout(timeout);
     busy = false;
   }
 }
