@@ -14,7 +14,7 @@ iframe { width: 100%; height: clamp(48px, 12vh, 88px); flex: none; border: 0; }
 </head>
 <body>
 <main><img id="radar" alt="WCNC regional weather radar"></main>
-<iframe src="severe.html" title="Live Concord weather alert ticker"></iframe>
+<iframe src="severe.html?v=5" title="Live Concord weather alert ticker"></iframe>
 <script>
 function updateRadar() {
   // Preload each refresh so a temporary image failure does not erase the radar.
