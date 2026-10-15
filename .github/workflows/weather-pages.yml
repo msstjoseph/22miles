@@ -1,6 +1,9 @@
 name: Refresh weather feed and publish display
 on:
-  push:
+  # Run after GitHub's branch-based Pages build so it cannot overwrite the backup feed.
+  workflow_run:
+    workflows: ['pages build and deployment']
+    types: [completed]
     branches: [main]
   schedule:
     - cron: '2-57/5 * * * *'
