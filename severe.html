@@ -13,9 +13,11 @@ body.watch { background: #805400; }
 body.advisory { background: #24415b; }
 body.unavailable { background: #424242; }
 #banner { display: flex; align-items: center; height: 100%; }
-#label { flex: none; height: 100%; display: flex; align-items: center;
-  padding: 0 .5em; background: rgba(0,0,0,.24); font-size: 42vh;
-  font-weight: bold; letter-spacing: .04em; }
+#label { flex: none; height: 100%; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; padding: 0 18vh;
+  background: rgba(0,0,0,.24); font-weight: bold; }
+#city { font-size: 23vh; line-height: 1.1; letter-spacing: .04em; }
+#temperature { font-size: 61vh; line-height: 1.05; font-variant-numeric: tabular-nums; }
 #window { flex: 1; min-width: 0; overflow: hidden; }
 #track { display: flex; width: max-content; will-change: transform;
   animation: scroll var(--duration, 25s) linear infinite; }
@@ -26,7 +28,7 @@ body.unavailable { background: #424242; }
 </head>
 <body>
 <div id="banner">
-  <div id="label">CONCORD</div>
+  <div id="label"><span id="city">CONCORD</span><span id="temperature" aria-label="Temperature loading">--°F</span></div>
   <div id="window"><div id="track"><span class="copy">Checking weather alerts…</span><span class="copy" aria-hidden="true">Checking weather alerts…</span></div></div>
 </div>
 <script>
@@ -105,7 +107,7 @@ function displayLatest() {
 }
 
 // XMLHttpRequest also works on signage players with limited fetch/AbortController support.
-function requestJSON(url) {
+function requestJSON(url, weatherData) {
   return new Promise(function (resolve, reject) {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
@@ -114,7 +116,8 @@ function requestJSON(url) {
       try {
         if (xhr.status < 200 || xhr.status >= 300) throw new Error('HTTP ' + xhr.status);
         const data = JSON.parse(xhr.responseText);
-        if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('Invalid alert feed');
+        if (!data || typeof data !== 'object') throw new Error('Invalid feed');
+        if (!weatherData && (data.type !== 'FeatureCollection' || !Array.isArray(data.features))) throw new Error('Invalid alert feed');
         resolve(data);
       } catch (error) { reject(error); }
     };
@@ -154,6 +157,77 @@ async function updateAlerts() {
     busy = false;
   }
 }
+
+const OBSERVATIONS_URL = 'https://api.weather.gov/stations/KJQF/observations?limit=5';
+const WEATHER_BACKUP_URL = 'https://msstjoseph.github.io/22miles/weather-data.json';
+const OBSERVATION_MAX_AGE = 2 * 60 * 60000;
+let temperatureReading = null;
+let temperatureBusy = false;
+
+function validTemperature(reading) {
+  if (!reading || typeof reading.temperatureF !== 'number' || !Number.isFinite(reading.temperatureF)) return false;
+  const age = Date.now() - Date.parse(reading.observedAt);
+  return Number.isFinite(age) && age >= -60000 && age <= OBSERVATION_MAX_AGE;
+}
+
+function observationTemperature(data) {
+  const readings = data.features.map(function (feature) {
+    const p = feature.properties || {};
+    const t = p.temperature || {};
+    if (typeof t.value !== 'number' || !Number.isFinite(t.value)) return null;
+    let fahrenheit;
+    if (t.unitCode === 'wmoUnit:degC') fahrenheit = t.value * 9 / 5 + 32;
+    else if (t.unitCode === 'wmoUnit:degF') fahrenheit = t.value;
+    else return null;
+    return { temperatureF: fahrenheit, observedAt: p.timestamp, station: 'KJQF' };
+  }).filter(validTemperature).sort(function (a, b) {
+    return Date.parse(b.observedAt) - Date.parse(a.observedAt);
+  });
+  if (!readings.length) throw new Error('No recent temperature observation');
+  return readings[0];
+}
+
+function displayTemperature() {
+  const element = document.getElementById('temperature');
+  if (!validTemperature(temperatureReading)) {
+    element.textContent = '--°F';
+    element.title = 'Concord temperature unavailable';
+    element.setAttribute('aria-label', 'Concord temperature unavailable');
+  } else {
+    element.textContent = Math.round(temperatureReading.temperatureF) + '°F';
+    element.title = 'Concord airport • Observed ' + new Date(temperatureReading.observedAt).toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+    });
+    element.setAttribute('aria-label', element.textContent + ' at Concord airport');
+  }
+  sizeTicker();
+}
+
+async function updateTemperature() {
+  if (temperatureBusy) return;
+  temperatureBusy = true;
+  try {
+    try {
+      temperatureReading = observationTemperature(await requestJSON(OBSERVATIONS_URL));
+    } catch (directError) {
+      const backup = await requestJSON(WEATHER_BACKUP_URL + '?t=' + Date.now(), true);
+      const age = Date.now() - Date.parse(backup.checkedAt);
+      if (!Number.isFinite(age) || age < -60000 || age > BACKUP_STALE_MS || !validTemperature(backup)) {
+        throw new Error('Temperature backup unavailable or stale');
+      }
+      temperatureReading = backup;
+    }
+  } catch (error) {
+    // Retain a recent observation during a brief outage; never display an expired reading.
+  } finally {
+    temperatureBusy = false;
+    displayTemperature();
+  }
+}
+updateTemperature();
+setInterval(updateTemperature, 5 * 60000);
+setInterval(displayTemperature, 10000);
+
 window.addEventListener('resize', sizeTicker);
 sizeTicker();
 updateAlerts();
