@@ -84,6 +84,17 @@ function rank(p) {
   return (severity[p.severity] || 0) * 10 + (/Warning/i.test(p.event) ? 3 : /Watch/i.test(p.event) ? 2 : 1);
 }
 
+function conciseAlert(p, now) {
+  const end = new Date(p.ends || p.expires);
+  const current = new Date(now === undefined ? Date.now() : now);
+  const zone = 'America/New_York';
+  const sameDay = end.toLocaleDateString('en-US', {timeZone: zone}) === current.toLocaleDateString('en-US', {timeZone: zone});
+  const options = {timeZone: zone, hour:'numeric', minute:'2-digit', timeZoneName:'short'};
+  if (!sameDay) options.weekday = 'short';
+  if (end.getTime() - current.getTime() > 6 * 86400000) { options.month = 'short'; options.day = 'numeric'; }
+  return p.event.toUpperCase() + ' • Until ' + end.toLocaleString('en-US', options).replace(':00', '');
+}
+
 function displayLatest() {
   if (!lastSuccess || Date.now() - lastSuccess > staleAfter) {
     show('Alerts unavailable — unable to confirm current conditions', 'unavailable');
@@ -95,15 +106,10 @@ function displayLatest() {
     show('No active alerts • Concord, NC 28025 • National Weather Service' + checked, '');
     return;
   }
-  const message = alerts.map(p => {
-    const end = new Date(p.ends || p.expires).toLocaleString('en-US', {
-      timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-    });
-    return p.event + ' — ' + (p.headline || p.areaDesc || 'Concord, NC') + ' • Until ' + end;
-  }).join('     •     ');
+  const message = alerts.map(p => conciseAlert(p)).join('     •     ');
   const kind = alerts.some(p => /Warning/i.test(p.event) || p.severity === 'Extreme') ? 'warning'
     : alerts.some(p => /Watch/i.test(p.event)) ? 'watch' : 'advisory';
-  show(message + checked, kind);
+  show(message, kind);
 }
 
 // XMLHttpRequest also works on signage players with limited fetch/AbortController support.
